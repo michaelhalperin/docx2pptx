@@ -12,7 +12,7 @@ const path    = require("path");
 const os      = require("os");
 const { execSync, spawn } = require("child_process");
 
-const PORT = 4242;
+const PORT = Number(process.env.PORT) || 4242;
 const UI   = path.join(__dirname, "ui.html");
 
 // ── Tiny multipart parser (no dependencies) ──────────────────────────────────
@@ -159,15 +159,17 @@ const server = http.createServer(async (req, res) => {
   res.end("Not found");
 });
 
-server.listen(PORT, "127.0.0.1", () => {
-  console.log(`\n✅  docx2pptx running → http://localhost:${PORT}\n`);
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`\n✅  docx2pptx running on port ${PORT}\n`);
 
-  // Try to open browser automatically
-  const url = `http://localhost:${PORT}`;
-  try {
-    const platform = process.platform;
-    if      (platform === "darwin") execSync(`open "${url}"`);
-    else if (platform === "win32")  execSync(`start "" "${url}"`);
-    else                            execSync(`xdg-open "${url}" 2>/dev/null || true`);
-  } catch (_) { /* user can open manually */ }
+  // Only auto-open browser for local development sessions.
+  if (!process.env.RENDER) {
+    const url = `http://localhost:${PORT}`;
+    try {
+      const platform = process.platform;
+      if      (platform === "darwin") execSync(`open "${url}"`);
+      else if (platform === "win32")  execSync(`start "" "${url}"`);
+      else                            execSync(`xdg-open "${url}" 2>/dev/null || true`);
+    } catch (_) { /* user can open manually */ }
+  }
 });

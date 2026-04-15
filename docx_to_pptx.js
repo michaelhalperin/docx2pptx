@@ -12,88 +12,137 @@
 
 "use strict";
 
-const fs   = require("fs");
+const fs = require("fs");
 const path = require("path");
 
 // ─── KodKode Brand Theme ──────────────────────────────────────────────────────
 const T = {
-  white:       "FFFFFF",
-  bg:          "FFFFFF",   // all slides are white
-  purple:      "6C5CE7",   // primary — # badge, borders, accents
-  teal:        "00BFA5",   // secondary — footer bar, definition borders
-  tealLight:   "E0F7F4",   // teal tint for cards
-  purpleLight: "EDE9FE",   // purple tint for cards
-  textDark:    "1A1A2E",   // near-black body text
-  textGray:    "6B7280",   // muted labels, subtitles
-  textMid:     "374151",   // medium body
-  codeBg:      "F5F5F5",   // light code background
-  codeNum:     "AAAAAA",   // line number color
-  borderLight: "E5E7EB",   // card/table borders
-  footerText:  "1A1A2E",   // footer label
-  headerGrad1: "6C5CE7",   // gradient bar start
-  headerGrad2: "00BFA5",   // gradient bar end
+  white: "FFFFFF",
+  bg: "FFFFFF", // all slides are white
+  purple: "6C5CE7", // primary — # badge, borders, accents
+  teal: "00BFA5", // secondary — footer bar, definition borders
+  tealLight: "E0F7F4", // teal tint for cards
+  purpleLight: "EDE9FE", // purple tint for cards
+  textDark: "1A1A2E", // near-black body text
+  textGray: "6B7280", // muted labels, subtitles
+  textMid: "374151", // medium body
+  codeBg: "F5F5F5", // light code background
+  codeNum: "AAAAAA", // line number color
+  borderLight: "E5E7EB", // card/table borders
+  footerBg: "F5F6F8", // light gray footer background
+  footerText: "1A1A2E", // footer label
+  headerGrad1: "6C5CE7", // gradient bar start
+  headerGrad2: "00BFA5", // gradient bar end
 };
 
 // Slide dimensions (LAYOUT_16x9 = 10" × 5.625")
-const W  = 10;
-const H  = 5.625;
-const FOOTER_H   = 0.42;
-const FOOTER_Y   = H - FOOTER_H;
-const HEADER_H   = 0.72;
-const GRAD_H     = 0.055;  // thin top gradient strip
-const CONTENT_Y  = HEADER_H + 0.15;
-const CONTENT_H  = FOOTER_Y - CONTENT_Y - 0.1;
-const LOGO_W     = 1.55;
-const LOGO_H     = 0.52;
-const LOGO_X     = W - LOGO_W - 0.18;
-const LOGO_Y     = 0.10;
+const W = 10;
+const H = 5.625;
+const FOOTER_H = 0.42;
+const FOOTER_Y = H - FOOTER_H;
+const HEADER_H = 0.96;
+const GRAD_H = 0.055; // thin top gradient strip
+const CONTENT_Y = HEADER_H + 0.15;
+const CONTENT_H = FOOTER_Y - CONTENT_Y - 0.1;
+const LOGO_W = 1.55;
+const LOGO_H = 0.52;
+const LOGO_X = W - LOGO_W - 0.18;
+const LOGO_Y = 0.1;
+const LOGO_IMAGE_PATH = path.join(__dirname, "assets", "kodkod-logo-ref.png");
 
 // ─── Shared logo renderer ────────────────────────────────────────────────────
 // Drawn as two independent text boxes (one per row) so font metrics don't merge.
 // We avoid Arial Black since LibreOffice renders it poorly — use bold Arial instead.
 function addLogo(pres, s) {
+  // Prefer an exact logo image extracted from the approved reference.
+  // This avoids font/rendering differences (especially in LibreOffice).
+  if (fs.existsSync(LOGO_IMAGE_PATH)) {
+    s.addImage({
+      path: LOGO_IMAGE_PATH,
+      x: LOGO_X - 0.8,
+      y: LOGO_Y - 0.03,
+      w: 2.18,
+      h: 0.74,
+    });
+    return;
+  }
+
+  // Fallback: vector/text approximation.
   const bx = LOGO_X - 0.08;
   const by = LOGO_Y - 0.05;
   const bw = LOGO_W + 0.12;
-  const bh = LOGO_H + 0.10;
+  const bh = LOGO_H + 0.1;
+  xw;
 
   // Card background
   s.addShape(pres.shapes.RECTANGLE, {
-    x: bx, y: by, w: bw, h: bh,
-    fill: { color: "F8F8F8" }, line: { color: T.borderLight, width: 1 },
+    x: bx,
+    y: by,
+    w: bw,
+    h: bh,
+    fill: { color: "F8F8F8" },
+    line: { color: T.borderLight, width: 1 },
   });
 
-  const rowH  = bh / 2 - 0.01;
+  const rowH = bh / 2 - 0.01;
   const textX = bx + 0.08;
   const textW = 0.62;
 
   // Row 1: "KOD" — black bold
   s.addText("KOD", {
-    x: textX, y: by + 0.03, w: textW, h: rowH,
-    fontSize: 15, bold: true, color: "111111",
-    fontFace: "Arial", align: "left", valign: "middle", margin: 0,
+    x: textX,
+    y: by + 0.03,
+    w: textW,
+    h: rowH,
+    fontSize: 15,
+    bold: true,
+    color: "111111",
+    fontFace: "Arial",
+    align: "left",
+    valign: "middle",
+    margin: 0,
   });
 
   // Row 2: "K" teal  +  "ODE" black
-  s.addText([
-    { text: "K",   options: { color: T.teal,   bold: true, fontSize: 15 } },
-    { text: "ODE", options: { color: "111111", bold: true, fontSize: 15 } },
-  ], {
-    x: textX, y: by + rowH + 0.03, w: textW, h: rowH,
-    fontFace: "Arial", align: "left", valign: "middle", margin: 0,
-  });
+  s.addText(
+    [
+      { text: "K", options: { color: T.teal, bold: true, fontSize: 15 } },
+      { text: "ODE", options: { color: "111111", bold: true, fontSize: 15 } },
+    ],
+    {
+      x: textX,
+      y: by + rowH + 0.03,
+      w: textW,
+      h: rowH,
+      fontFace: "Arial",
+      align: "left",
+      valign: "middle",
+      margin: 0,
+    },
+  );
 
   // Hebrew subtitle — right column inside the card
-  s.addText([
-    { text: "התוכנית החרדית", options: { breakLine: true } },
-    { text: "ליחידות הייטק",  options: { breakLine: true } },
-    { text: "במערכת הביטחון", options: {} },
-  ], {
-    x: bx + 0.74, y: by + 0.04, w: bw - 0.80, h: bh - 0.08,
-    fontSize: 5.5, color: T.textGray, fontFace: "Arial",
-    align: "right", valign: "middle", margin: 0, lineSpacingMultiple: 1.2,
-    rtlMode: true,
-  });
+  s.addText(
+    [
+      { text: "התוכנית החרדית", options: { breakLine: true } },
+      { text: "ליחידות הייטק", options: { breakLine: true } },
+      { text: "במערכת הביטחון", options: {} },
+    ],
+    {
+      x: bx + 0.74,
+      y: by + 0.04,
+      w: bw - 0.8,
+      h: bh - 0.08,
+      fontSize: 5.5,
+      color: T.textGray,
+      fontFace: "Arial",
+      align: "right",
+      valign: "middle",
+      margin: 0,
+      lineSpacingMultiple: 1.2,
+      rtlMode: true,
+    },
+  );
 }
 
 // ─── Shared: header + footer drawn on every slide ────────────────────────────
@@ -104,14 +153,14 @@ function addLogo(pres, s) {
  * hashBadge — true = draw purple # square badge (not on title slide)
  */
 function addChrome(pres, s, title, hashBadge = true) {
-  // ── Top gradient strip ──────────────────────────────────────────────────
+  // ── Top strip (all slides): solid purple ────────────────────────────────
   s.addShape(pres.shapes.RECTANGLE, {
-    x: 0, y: 0, w: W / 2, h: GRAD_H,
-    fill: { color: T.purple }, line: { color: T.purple, width: 0 },
-  });
-  s.addShape(pres.shapes.RECTANGLE, {
-    x: W / 2, y: 0, w: W / 2, h: GRAD_H,
-    fill: { color: T.teal }, line: { color: T.teal, width: 0 },
+    x: 0,
+    y: 0,
+    w: W,
+    h: GRAD_H,
+    fill: { color: T.purple },
+    line: { color: T.purple, width: 0 },
   });
 
   // ── KodKode logo ────────────────────────────────────────────────────────
@@ -124,45 +173,84 @@ function addChrome(pres, s, title, hashBadge = true) {
     const badgeH = 0.46;
     const badgeY = GRAD_H + (HEADER_H - GRAD_H - badgeH) / 2;
     s.addShape(pres.shapes.RECTANGLE, {
-      x: 0.22, y: badgeY, w: badgeW, h: badgeH,
-      fill: { color: T.purple }, line: { color: T.purple, width: 0 },
+      x: 0.22,
+      y: badgeY,
+      w: badgeW,
+      h: badgeH,
+      fill: { color: T.purple },
+      line: { color: T.purple, width: 0 },
     });
     s.addText("#", {
-      x: 0.22, y: badgeY, w: badgeW, h: badgeH,
-      fontSize: 18, bold: true, color: T.white,
-      fontFace: "Arial", align: "center", valign: "middle", margin: 0,
+      x: 0.22,
+      y: badgeY,
+      w: badgeW,
+      h: badgeH,
+      fontSize: 18,
+      bold: true,
+      color: T.white,
+      fontFace: "Arial",
+      align: "center",
+      valign: "middle",
+      margin: 0,
     });
 
     // Title text (gray, not bold, large)
     s.addText(title, {
-      x: 0.84, y: GRAD_H + 0.05, w: LOGO_X - 0.95, h: HEADER_H - GRAD_H - 0.05,
-      fontSize: 22, bold: false, color: T.textGray,
-      fontFace: "Arial", valign: "middle", margin: 0,
+      x: 0.84,
+      y: GRAD_H + 0.05,
+      w: LOGO_X - 0.95,
+      h: HEADER_H - GRAD_H - 0.05,
+      fontSize: 22,
+      bold: false,
+      color: T.textGray,
+      fontFace: "Arial",
+      valign: "middle",
+      margin: 0,
     });
 
     // Thin horizontal rule under header
     s.addShape(pres.shapes.RECTANGLE, {
-      x: 0, y: HEADER_H, w: W, h: 0.012,
-      fill: { color: T.borderLight }, line: { color: T.borderLight, width: 0 },
+      x: 0,
+      y: HEADER_H,
+      w: W,
+      h: 0.012,
+      fill: { color: T.borderLight },
+      line: { color: T.borderLight, width: 0 },
     });
   }
 
   // ── Footer ──────────────────────────────────────────────────────────────
-  // White bar background
+  // Light gray footer background
   s.addShape(pres.shapes.RECTANGLE, {
-    x: 0, y: FOOTER_Y, w: W, h: FOOTER_H,
-    fill: { color: T.white }, line: { color: T.borderLight, width: 1 },
+    x: 0,
+    y: FOOTER_Y,
+    w: W,
+    h: FOOTER_H,
+    fill: { color: T.footerBg },
+    line: { color: T.borderLight, width: 1 },
   });
   // Teal left accent block
   s.addShape(pres.shapes.RECTANGLE, {
-    x: 0, y: FOOTER_Y, w: 0.18, h: FOOTER_H,
-    fill: { color: T.teal }, line: { color: T.teal, width: 0 },
+    x: 0,
+    y: FOOTER_Y,
+    w: 0.18,
+    h: FOOTER_H,
+    fill: { color: T.teal },
+    line: { color: T.teal, width: 0 },
   });
   // Footer text
   s.addText("קודקוד — התוכנית החרדית ליחידות הייטק במערכת הביטחון", {
-    x: 0.28, y: FOOTER_Y, w: W - 0.36, h: FOOTER_H,
-    fontSize: 10, color: T.footerText, fontFace: "Arial",
-    align: "center", valign: "middle", margin: 0, rtlMode: true,
+    x: 0.28,
+    y: FOOTER_Y,
+    w: W - 0.36,
+    h: FOOTER_H,
+    fontSize: 10,
+    color: T.footerText,
+    fontFace: "Arial",
+    align: "center",
+    valign: "middle",
+    margin: 0,
+    rtlMode: true,
   });
 }
 
@@ -185,7 +273,7 @@ async function parseDocx(filePath) {
   if (ext === ".docx") {
     // Use HTML output from mammoth — preserves bold/heading vs bullet structure
     const mammoth = require("mammoth");
-    const result  = await mammoth.convertToHtml({ path: filePath });
+    const result = await mammoth.convertToHtml({ path: filePath });
     return parseHtml(result.value);
   } else {
     const rawText = fs.readFileSync(filePath, "utf8");
@@ -200,18 +288,18 @@ async function parseDocx(filePath) {
  * Plain <p> after a title (no bold) = code lines, collected as bullets.
  */
 function parseHtml(html) {
-  const slides  = [];
-  let current   = null;
+  const slides = [];
+  let current = null;
 
   // Tokenise: split on tags we care about
   // Each token is either a tag or text content
   const tokens = html.split(/(<\/?(?:p|ul|li|strong|h[1-6])[^>]*>)/i);
 
   let inStrong = false;
-  let inLi     = false;
-  let inP      = false;
-  let pText    = "";
-  let liText   = "";
+  let inLi = false;
+  let inP = false;
+  let pText = "";
+  let liText = "";
 
   function flush() {
     // Called when a paragraph or list item ends
@@ -222,10 +310,14 @@ function parseHtml(html) {
   while (i < tokens.length) {
     const tok = tokens[i];
 
-    if (/^<strong>/i.test(tok))      { inStrong = true; }
-    else if (/^<\/strong>/i.test(tok)){ inStrong = false; }
-    else if (/^<p[^>]*>/i.test(tok)) { inP = true; pText = ""; }
-    else if (/^<\/p>/i.test(tok)) {
+    if (/^<strong>/i.test(tok)) {
+      inStrong = true;
+    } else if (/^<\/strong>/i.test(tok)) {
+      inStrong = false;
+    } else if (/^<p[^>]*>/i.test(tok)) {
+      inP = true;
+      pText = "";
+    } else if (/^<\/p>/i.test(tok)) {
       const t = stripTags(pText).trim();
       if (t) {
         if (inStrong || pWasBold) {
@@ -239,21 +331,23 @@ function parseHtml(html) {
           current = { title: t, bullets: [] };
         }
       }
-      inP = false; pText = ""; pWasBold = false;
-    }
-    else if (/^<li[^>]*>/i.test(tok)) { inLi = true; liText = ""; }
-    else if (/^<\/li>/i.test(tok)) {
+      inP = false;
+      pText = "";
+      pWasBold = false;
+    } else if (/^<li[^>]*>/i.test(tok)) {
+      inLi = true;
+      liText = "";
+    } else if (/^<\/li>/i.test(tok)) {
       const t = stripTags(liText).trim();
       if (t && current) current.bullets.push(t);
-      inLi = false; liText = "";
-    }
-    else if (/^<h[1-6]/i.test(tok)) {
+      inLi = false;
+      liText = "";
+    } else if (/^<h[1-6]/i.test(tok)) {
       // Headings also act as slide titles — collect text until </hN>
-    }
-    else {
+    } else {
       // Text node
       const text = decodeHtmlEntities(tok);
-      if (inLi)       liText += text;
+      if (inLi) liText += text;
       else if (inP) {
         pText += text;
         if (inStrong) pWasBold = true;
@@ -276,11 +370,11 @@ function stripTags(str) {
 
 function decodeHtmlEntities(str) {
   return str
-    .replace(/&amp;/g,  "&")
-    .replace(/&lt;/g,   "<")
-    .replace(/&gt;/g,   ">")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
-    .replace(/&#39;/g,  "'")
+    .replace(/&#39;/g, "'")
     .replace(/&nbsp;/g, " ");
 }
 
@@ -289,8 +383,8 @@ function parseRawText(text) {
   const lines = text.split(/\r?\n/);
 
   // Format A: "שקופית N – Title" explicit markers
-  const hasExplicitMarkers = lines.some(l =>
-    /^שקופית\s+\d+\s*[–\-:]/u.test(l.trim())
+  const hasExplicitMarkers = lines.some((l) =>
+    /^שקופית\s+\d+\s*[–\-:]/u.test(l.trim()),
   );
 
   if (hasExplicitMarkers) {
@@ -302,7 +396,7 @@ function parseRawText(text) {
 
 function parseFormatA(lines) {
   const slides = [];
-  let current  = null;
+  let current = null;
   for (const rawLine of lines) {
     const line = rawLine.trim();
     if (!line) continue;
@@ -312,10 +406,16 @@ function parseFormatA(lines) {
       current = { title: m[2].trim(), bullets: [] };
       continue;
     }
-    if (!current) { current = { title: line, bullets: [] }; continue; }
+    if (!current) {
+      current = { title: line, bullets: [] };
+      continue;
+    }
     if (line.includes("•")) {
-      line.split("•").map(s => s.trim()).filter(Boolean)
-          .forEach(b => current.bullets.push(b));
+      line
+        .split("•")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .forEach((b) => current.bullets.push(b));
     } else {
       current.bullets.push(line);
     }
@@ -330,13 +430,21 @@ function parseFormatB(lines) {
   let block = [];
   for (const rawLine of lines) {
     const line = rawLine.trim();
-    if (!line) { if (block.length > 0) { blocks.push(block); block = []; } }
-    else block.push(line);
+    if (!line) {
+      if (block.length > 0) {
+        blocks.push(block);
+        block = [];
+      }
+    } else block.push(line);
   }
   if (block.length > 0) blocks.push(block);
   return blocks
-    .filter(b => b.length > 0)
-    .map((b, i) => ({ index: i, title: b[0], bullets: b.slice(1).filter(Boolean) }));
+    .filter((b) => b.length > 0)
+    .map((b, i) => ({
+      index: i,
+      title: b[0],
+      bullets: b.slice(1).filter(Boolean),
+    }));
 }
 
 // ─── Slide 1: Title ──────────────────────────────────────────────────────────
@@ -344,14 +452,14 @@ async function buildTitleSlide(pres, slide) {
   const s = pres.addSlide();
   s.background = { color: T.white };
 
-  // Top gradient strip
+  // Top strip (title slide only): solid purple
   s.addShape(pres.shapes.RECTANGLE, {
-    x: 0, y: 0, w: W / 2, h: GRAD_H,
-    fill: { color: T.purple }, line: { color: T.purple, width: 0 },
-  });
-  s.addShape(pres.shapes.RECTANGLE, {
-    x: W / 2, y: 0, w: W / 2, h: GRAD_H,
-    fill: { color: T.teal }, line: { color: T.teal, width: 0 },
+    x: 0,
+    y: 0,
+    w: W,
+    h: GRAD_H,
+    fill: { color: T.purple },
+    line: { color: T.purple, width: 0 },
   });
 
   // KodKode logo
@@ -359,15 +467,26 @@ async function buildTitleSlide(pres, slide) {
 
   // Left purple vertical bar
   s.addShape(pres.shapes.RECTANGLE, {
-    x: 0.32, y: 1.1, w: 0.07, h: 1.9,
-    fill: { color: T.purple }, line: { color: T.purple, width: 0 },
+    x: 0.32,
+    y: 1.1,
+    w: 0.07,
+    h: 1.9,
+    fill: { color: T.purple },
+    line: { color: T.purple, width: 0 },
   });
 
   // Main title (large, gray, RTL)
   s.addText(slide.title, {
-    x: 0.55, y: 1.1, w: 6.8, h: 1.6,
-    fontSize: 38, bold: true, color: "AAAAAA",
-    fontFace: "Arial", valign: "middle", margin: 0,
+    x: 0.55,
+    y: 1.1,
+    w: 6.8,
+    h: 1.6,
+    fontSize: 38,
+    bold: true,
+    color: "AAAAAA",
+    fontFace: "Arial",
+    valign: "middle",
+    margin: 0,
     rtlMode: true,
   });
 
@@ -375,25 +494,49 @@ async function buildTitleSlide(pres, slide) {
   const subs = slide.bullets.slice(0, 5);
   if (subs.length > 0) {
     s.addText(subs.join("  ·  "), {
-      x: 0.55, y: 3.1, w: 8.5, h: 0.45,
-      fontSize: 13, color: T.textGray, fontFace: "Arial",
-      valign: "middle", margin: 0, italic: true, rtlMode: true,
+      x: 0.55,
+      y: 3.1,
+      w: 8.5,
+      h: 0.45,
+      fontSize: 13,
+      color: T.textGray,
+      fontFace: "Arial",
+      valign: "middle",
+      margin: 0,
+      italic: true,
+      rtlMode: true,
     });
   }
 
   // Footer
   s.addShape(pres.shapes.RECTANGLE, {
-    x: 0, y: FOOTER_Y, w: W, h: FOOTER_H,
-    fill: { color: T.white }, line: { color: T.borderLight, width: 1 },
+    x: 0,
+    y: FOOTER_Y,
+    w: W,
+    h: FOOTER_H,
+    fill: { color: T.footerBg },
+    line: { color: T.borderLight, width: 1 },
   });
   s.addShape(pres.shapes.RECTANGLE, {
-    x: 0, y: FOOTER_Y, w: 0.18, h: FOOTER_H,
-    fill: { color: T.teal }, line: { color: T.teal, width: 0 },
+    x: 0,
+    y: FOOTER_Y,
+    w: 0.18,
+    h: FOOTER_H,
+    fill: { color: T.teal },
+    line: { color: T.teal, width: 0 },
   });
   s.addText("קודקוד — התוכנית החרדית ליחידות הייטק במערכת הביטחון", {
-    x: 0.28, y: FOOTER_Y, w: W - 0.36, h: FOOTER_H,
-    fontSize: 10, color: T.footerText, fontFace: "Arial",
-    align: "center", valign: "middle", margin: 0, rtlMode: true,
+    x: 0.28,
+    y: FOOTER_Y,
+    w: W - 0.36,
+    h: FOOTER_H,
+    fontSize: 10,
+    color: T.footerText,
+    fontFace: "Arial",
+    align: "center",
+    valign: "middle",
+    margin: 0,
+    rtlMode: true,
   });
 }
 
@@ -406,36 +549,21 @@ async function buildBulletsSlide(pres, slide) {
   const bullets = slide.bullets.slice(0, 6);
   if (bullets.length === 0) return s;
 
-  const availH = FOOTER_Y - CONTENT_Y - 0.1;
-  const gap    = 0.13;
-  const cardH  = Math.min(0.78, (availH - gap * (bullets.length - 1)) / bullets.length);
-  const totalH = bullets.length * cardH + (bullets.length - 1) * gap;
-  const startY = CONTENT_Y + (availH - totalH) / 2;
-
-  bullets.forEach((bullet, i) => {
-    const y = startY + i * (cardH + gap);
-
-    // Card
-    s.addShape(pres.shapes.RECTANGLE, {
-      x: 0.35, y, w: 9.3, h: cardH,
-      fill: { color: T.white },
-      line: { color: T.borderLight, width: 1 },
-      shadow: { type: "outer", color: "000000", blur: 3, offset: 1, angle: 135, opacity: 0.05 },
-    });
-
-    // Left accent stripe — alternating purple / teal
-    const stripe = i % 2 === 0 ? T.purple : T.teal;
-    s.addShape(pres.shapes.RECTANGLE, {
-      x: 0.35, y, w: 0.055, h: cardH,
-      fill: { color: stripe }, line: { color: stripe, width: 0 },
-    });
-
-    // Bullet text
-    s.addText(bullet, {
-      x: 0.55, y: y + 0.04, w: 8.9, h: cardH - 0.08,
-      fontSize: 14, color: T.textDark, fontFace: "Arial",
-      valign: "middle", margin: 0, rtlMode: true,
-    });
+  const freeText = bullets.map((b) => `• ${b}`).join("\n\n");
+  s.addText(freeText, {
+    x: 0.55,
+    y: CONTENT_Y + 0.12,
+    w: 8.9,
+    h: FOOTER_Y - CONTENT_Y - 0.24,
+    fontSize: 18,
+    color: T.textDark,
+    fontFace: "Arial",
+    valign: "top",
+    margin: 0,
+    rtlMode: true,
+    breakLine: true,
+    lineSpacingMultiple: 1.2,
+    fit: "shrink",
   });
 
   return s;
@@ -447,37 +575,59 @@ async function buildCodeSlide(pres, slide) {
   s.background = { color: T.white };
   addChrome(pres, s, slide.title);
 
-  const splitX  = 0.35;
-  const codeW   = 4.85;
-  const defX    = splitX + codeW + 0.2;
-  const defW    = W - defX - 0.35;
-  const areaY   = CONTENT_Y + 0.05;
-  const areaH   = FOOTER_Y - areaY - 0.12;
+  const splitX = 0.35;
+  const codeW = 4.85;
+  const defX = splitX + codeW + 0.2;
+  const defW = W - defX - 0.35;
+  const areaY = CONTENT_Y + 0.05;
+  const areaH = FOOTER_Y - areaY - 0.12;
 
   // ── Left: code panel ──────────────────────────────────────────────────
   // Window chrome bar
   s.addShape(pres.shapes.RECTANGLE, {
-    x: splitX, y: areaY, w: codeW, h: 0.32,
-    fill: { color: "EEEEEE" }, line: { color: T.borderLight, width: 1 },
+    x: splitX,
+    y: areaY,
+    w: codeW,
+    h: 0.32,
+    fill: { color: "EEEEEE" },
+    line: { color: T.borderLight, width: 1 },
   });
   // Traffic lights
-  ["FF5F57","FEBC2E","28C840"].forEach((c, i) => {
+  ["FF5F57", "FEBC2E", "28C840"].forEach((c, i) => {
     s.addShape(pres.shapes.OVAL, {
-      x: splitX + 0.16 + i * 0.24, y: areaY + 0.09, w: 0.14, h: 0.14,
-      fill: { color: c }, line: { color: c, width: 0 },
+      x: splitX + 0.16 + i * 0.24,
+      y: areaY + 0.09,
+      w: 0.14,
+      h: 0.14,
+      fill: { color: c },
+      line: { color: c, width: 0 },
     });
   });
   // Filename
-  s.addText(slide.title.replace(/דוגמת קוד\s*/i,"").trim() + ".js" || "main.js", {
-    x: splitX + 1.0, y: areaY + 0.02, w: codeW - 1.2, h: 0.28,
-    fontSize: 10, color: T.textGray, fontFace: "Consolas",
-    align: "left", valign: "middle", margin: 0,
-  });
+  s.addText(
+    slide.title.replace(/דוגמת קוד\s*/i, "").trim() + ".js" || "main.js",
+    {
+      x: splitX + 1.0,
+      y: areaY + 0.02,
+      w: codeW - 1.2,
+      h: 0.28,
+      fontSize: 10,
+      color: T.textGray,
+      fontFace: "Consolas",
+      align: "left",
+      valign: "middle",
+      margin: 0,
+    },
+  );
 
   // Code body
   s.addShape(pres.shapes.RECTANGLE, {
-    x: splitX, y: areaY + 0.32, w: codeW, h: areaH - 0.32,
-    fill: { color: T.codeBg }, line: { color: T.borderLight, width: 1 },
+    x: splitX,
+    y: areaY + 0.32,
+    w: codeW,
+    h: areaH - 0.32,
+    fill: { color: T.codeBg },
+    line: { color: T.borderLight, width: 1 },
   });
 
   // ── Code lines: use actual slide bullets if present, else template ──────
@@ -485,7 +635,7 @@ async function buildCodeSlide(pres, slide) {
   const lineH = 0.235;
   const hasRealCode = slide.bullets.length > 0;
   const codeLines = hasRealCode
-    ? slide.bullets.map(b => [{ text: b, options: { color: "333333" } }])
+    ? slide.bullets.map((b) => [{ text: b, options: { color: "333333" } }])
     : buildCodeContent(slide.title);
 
   codeLines.forEach((lineTokens, li) => {
@@ -494,41 +644,78 @@ async function buildCodeSlide(pres, slide) {
 
     // Line number
     s.addText(String(li + 1), {
-      x: splitX + 0.06, y: ly, w: 0.28, h: lineH,
-      fontSize: 9.5, color: T.codeNum, fontFace: "Consolas",
-      align: "right", valign: "top", margin: 0,
+      x: splitX + 0.06,
+      y: ly,
+      w: 0.28,
+      h: lineH,
+      fontSize: 9.5,
+      color: T.codeNum,
+      fontFace: "Consolas",
+      align: "right",
+      valign: "top",
+      margin: 0,
     });
 
     // Code tokens
     s.addText(lineTokens, {
-      x: splitX + 0.38, y: ly, w: codeW - 0.44, h: lineH,
-      fontSize: 10.5, fontFace: "Consolas",
-      align: "left", valign: "top", margin: 0,
+      x: splitX + 0.38,
+      y: ly,
+      w: codeW - 0.44,
+      h: lineH,
+      fontSize: 10.5,
+      fontFace: "Consolas",
+      align: "left",
+      valign: "top",
+      margin: 0,
     });
   });
 
   // ── Right: definition box (teal border, purple label) ────────────────
   s.addShape(pres.shapes.RECTANGLE, {
-    x: defX, y: areaY, w: defW, h: areaH,
-    fill: { color: T.white }, line: { color: T.purple, width: 2 },
+    x: defX,
+    y: areaY,
+    w: defW,
+    h: areaH,
+    fill: { color: T.white },
+    line: { color: T.purple, width: 2 },
   });
 
   // "הגדרה" label bar at top of definition box
   s.addShape(pres.shapes.RECTANGLE, {
-    x: defX, y: areaY, w: defW, h: 0.34,
-    fill: { color: T.purpleLight }, line: { color: T.purple, width: 0 },
+    x: defX,
+    y: areaY,
+    w: defW,
+    h: 0.34,
+    fill: { color: T.purpleLight },
+    line: { color: T.purple, width: 0 },
   });
   s.addText("הגדרה", {
-    x: defX + 0.12, y: areaY + 0.02, w: defW - 0.24, h: 0.30,
-    fontSize: 12, bold: true, color: T.purple, fontFace: "Arial",
-    valign: "middle", margin: 0, rtlMode: true,
+    x: defX + 0.12,
+    y: areaY + 0.02,
+    w: defW - 0.24,
+    h: 0.3,
+    fontSize: 12,
+    bold: true,
+    color: T.purple,
+    fontFace: "Arial",
+    valign: "middle",
+    margin: 0,
+    rtlMode: true,
   });
 
   // Definition box is intentionally left blank — to be filled manually in PowerPoint
   s.addText("הכנס כאן את ההגדרה בעברית...", {
-    x: defX + 0.12, y: areaY + 0.42, w: defW - 0.24, h: areaH - 0.54,
-    fontSize: 12, color: "CCCCCC", fontFace: "Arial",
-    valign: "top", margin: 0, rtlMode: true, wrap: true,
+    x: defX + 0.12,
+    y: areaY + 0.42,
+    w: defW - 0.24,
+    h: areaH - 0.54,
+    fontSize: 12,
+    color: "CCCCCC",
+    fontFace: "Arial",
+    valign: "top",
+    margin: 0,
+    rtlMode: true,
+    wrap: true,
     italic: true,
   });
 
@@ -539,18 +726,36 @@ async function buildCodeSlide(pres, slide) {
 function buildCodeContent(title) {
   const t = title.toLowerCase();
 
-  const kw  = (txt) => ({ text: txt, options: { color: "C792EA" } });  // keyword
-  const fn  = (txt) => ({ text: txt, options: { color: "61AFEF" } });  // function
-  const str = (txt) => ({ text: txt, options: { color: "98C379" } });  // string
-  const cm  = (txt) => ({ text: txt, options: { color: "7F848E", italic: true } }); // comment
-  const pl  = (txt) => ({ text: txt, options: { color: "333333" } });  // plain
+  const kw = (txt) => ({ text: txt, options: { color: "C792EA" } }); // keyword
+  const fn = (txt) => ({ text: txt, options: { color: "61AFEF" } }); // function
+  const str = (txt) => ({ text: txt, options: { color: "98C379" } }); // string
+  const cm = (txt) => ({
+    text: txt,
+    options: { color: "7F848E", italic: true },
+  }); // comment
+  const pl = (txt) => ({ text: txt, options: { color: "333333" } }); // plain
 
   if (t.includes("בסיסי") || t.includes("basic")) {
     return [
-      [kw("import "), pl("{ "), fn("useEffect"), pl(", "), fn("useState"), pl(" } "), kw("from "), str("'react'")],
+      [
+        kw("import "),
+        pl("{ "),
+        fn("useEffect"),
+        pl(", "),
+        fn("useState"),
+        pl(" } "),
+        kw("from "),
+        str("'react'"),
+      ],
       [pl("")],
       [kw("function "), fn("UsersList"), pl("() {")],
-      [pl("  "), kw("const "), pl("[users, setUsers] = "), fn("useState"), pl("([]);")],
+      [
+        pl("  "),
+        kw("const "),
+        pl("[users, setUsers] = "),
+        fn("useState"),
+        pl("([]);"),
+      ],
       [pl("")],
       [pl("  "), fn("useEffect"), pl("(() => {")],
       [pl("    "), fn("fetch"), pl("("), str("'/api/users'"), pl(")")],
@@ -576,11 +781,23 @@ function buildCodeContent(title) {
   if (t.includes("cleanup")) {
     return [
       [fn("useEffect"), pl("(() => {")],
-      [pl("  "), kw("const "), pl("timer = "), fn("setInterval"), pl("(() => {")],
+      [
+        pl("  "),
+        kw("const "),
+        pl("timer = "),
+        fn("setInterval"),
+        pl("(() => {"),
+      ],
       [pl("    console."), fn("log"), pl("("), str("'tick'"), pl(");")],
       [pl("  }, 1000);")],
       [pl("")],
-      [pl("  "), kw("return "), pl("() => "), fn("clearInterval"), pl("(timer);")],
+      [
+        pl("  "),
+        kw("return "),
+        pl("() => "),
+        fn("clearInterval"),
+        pl("(timer);"),
+      ],
       [pl("}, []);"), cm("  // ← cleanup מונע memory leak")],
     ];
   }
@@ -599,15 +816,31 @@ async function buildConceptSlide(pres, slide) {
   addChrome(pres, s, slide.title);
 
   // Large centered concept text box with teal border
-  const bx = 1.0, by = CONTENT_Y + 0.3, bw = W - 2.0, bh = FOOTER_Y - by - 0.5;
+  const bx = 1.0,
+    by = CONTENT_Y + 0.3,
+    bw = W - 2.0,
+    bh = FOOTER_Y - by - 0.5;
   s.addShape(pres.shapes.RECTANGLE, {
-    x: bx, y: by, w: bw, h: bh,
-    fill: { color: T.tealLight }, line: { color: T.teal, width: 2 },
+    x: bx,
+    y: by,
+    w: bw,
+    h: bh,
+    fill: { color: T.tealLight },
+    line: { color: T.teal, width: 2 },
   });
   s.addText(slide.title, {
-    x: bx + 0.2, y: by + 0.1, w: bw - 0.4, h: bh - 0.2,
-    fontSize: 32, bold: true, color: T.textDark, fontFace: "Arial",
-    align: "center", valign: "middle", margin: 0, rtlMode: true,
+    x: bx + 0.2,
+    y: by + 0.1,
+    w: bw - 0.4,
+    h: bh - 0.2,
+    fontSize: 32,
+    bold: true,
+    color: T.textDark,
+    fontFace: "Arial",
+    align: "center",
+    valign: "middle",
+    margin: 0,
+    rtlMode: true,
   });
 
   return s;
@@ -620,20 +853,32 @@ async function buildTextHeavySlide(pres, slide) {
   addChrome(pres, s, slide.title);
 
   const bullets = slide.bullets.slice(0, 4);
-  const gap  = 0.15;
-  const bH   = (FOOTER_Y - CONTENT_Y - 0.15 - gap * (bullets.length - 1)) / bullets.length;
+  const gap = 0.15;
+  const bH =
+    (FOOTER_Y - CONTENT_Y - 0.15 - gap * (bullets.length - 1)) / bullets.length;
 
   bullets.forEach((b, i) => {
     const y = CONTENT_Y + 0.05 + i * (bH + gap);
     s.addShape(pres.shapes.RECTANGLE, {
-      x: 0.35, y, w: 9.3, h: bH,
+      x: 0.35,
+      y,
+      w: 9.3,
+      h: bH,
       fill: { color: i % 2 === 0 ? T.purpleLight : T.tealLight },
       line: { color: i % 2 === 0 ? T.purple : T.teal, width: 1 },
     });
     s.addText(b, {
-      x: 0.55, y: y + 0.06, w: 8.9, h: bH - 0.12,
-      fontSize: 14, color: T.textDark, fontFace: "Arial",
-      valign: "middle", margin: 0, rtlMode: true, wrap: true,
+      x: 0.55,
+      y: y + 0.06,
+      w: 8.9,
+      h: bH - 0.12,
+      fontSize: 14,
+      color: T.textDark,
+      fontFace: "Arial",
+      valign: "middle",
+      margin: 0,
+      rtlMode: true,
+      wrap: true,
     });
   });
 
@@ -647,38 +892,66 @@ async function buildSummarySlide(pres, slide) {
   addChrome(pres, s, slide.title);
 
   const bullets = slide.bullets.slice(0, 3);
-  const cols    = bullets.length || 1;
-  const gap     = 0.2;
-  const cardW   = (9.3 - gap * (cols - 1)) / cols;
-  const cardY   = CONTENT_Y + 0.1;
-  const cardH   = FOOTER_Y - cardY - 0.12;
+  const cols = bullets.length || 1;
+  const gap = 0.2;
+  const cardW = (9.3 - gap * (cols - 1)) / cols;
+  const cardY = CONTENT_Y + 0.1;
+  const cardH = FOOTER_Y - cardY - 0.12;
 
   bullets.forEach((b, i) => {
-    const x      = 0.35 + i * (cardW + gap);
+    const x = 0.35 + i * (cardW + gap);
     const stripe = i % 2 === 0 ? T.purple : T.teal;
-    const tint   = i % 2 === 0 ? T.purpleLight : T.tealLight;
+    const tint = i % 2 === 0 ? T.purpleLight : T.tealLight;
 
     s.addShape(pres.shapes.RECTANGLE, {
-      x, y: cardY, w: cardW, h: cardH,
-      fill: { color: T.white }, line: { color: stripe, width: 2 },
+      x,
+      y: cardY,
+      w: cardW,
+      h: cardH,
+      fill: { color: T.white },
+      line: { color: stripe, width: 2 },
     });
     s.addShape(pres.shapes.RECTANGLE, {
-      x, y: cardY, w: cardW, h: 0.1,
-      fill: { color: stripe }, line: { color: stripe, width: 0 },
+      x,
+      y: cardY,
+      w: cardW,
+      h: 0.1,
+      fill: { color: stripe },
+      line: { color: stripe, width: 0 },
     });
     s.addShape(pres.shapes.RECTANGLE, {
-      x, y: cardY + 0.1, w: cardW, h: 0.36,
-      fill: { color: tint }, line: { color: tint, width: 0 },
+      x,
+      y: cardY + 0.1,
+      w: cardW,
+      h: 0.36,
+      fill: { color: tint },
+      line: { color: tint, width: 0 },
     });
     s.addText(String(i + 1), {
-      x: x + 0.1, y: cardY + 0.13, w: 0.32, h: 0.30,
-      fontSize: 16, bold: true, color: stripe, fontFace: "Arial",
-      align: "center", valign: "middle", margin: 0,
+      x: x + 0.1,
+      y: cardY + 0.13,
+      w: 0.32,
+      h: 0.3,
+      fontSize: 16,
+      bold: true,
+      color: stripe,
+      fontFace: "Arial",
+      align: "center",
+      valign: "middle",
+      margin: 0,
     });
     s.addText(b, {
-      x: x + 0.14, y: cardY + 0.52, w: cardW - 0.28, h: cardH - 0.64,
-      fontSize: 13, color: T.textDark, fontFace: "Arial",
-      valign: "top", margin: 0, rtlMode: true, wrap: true,
+      x: x + 0.14,
+      y: cardY + 0.52,
+      w: cardW - 0.28,
+      h: cardH - 0.64,
+      fontSize: 13,
+      color: T.textDark,
+      fontFace: "Arial",
+      valign: "top",
+      margin: 0,
+      rtlMode: true,
+      wrap: true,
       lineSpacingMultiple: 1.35,
     });
   });
@@ -692,39 +965,69 @@ async function buildTakeawaysSlide(pres, slide) {
   s.background = { color: T.white };
   addChrome(pres, s, slide.title);
 
-  const bullets  = slide.bullets.slice(0, 5);
-  const gap      = 0.12;
-  const availH   = FOOTER_Y - CONTENT_Y - 0.1;
-  const cardH    = Math.min(0.75, (availH - gap * (bullets.length - 1)) / bullets.length);
-  const totalH   = bullets.length * cardH + (bullets.length - 1) * gap;
-  const startY   = CONTENT_Y + (availH - totalH) / 2;
+  const bullets = slide.bullets.slice(0, 5);
+  const gap = 0.12;
+  const availH = FOOTER_Y - CONTENT_Y - 0.1;
+  const cardH = Math.min(
+    0.75,
+    (availH - gap * (bullets.length - 1)) / bullets.length,
+  );
+  const totalH = bullets.length * cardH + (bullets.length - 1) * gap;
+  const startY = CONTENT_Y + (availH - totalH) / 2;
 
   bullets.forEach((b, i) => {
-    const y      = startY + i * (cardH + gap);
+    const y = startY + i * (cardH + gap);
     const stripe = i % 2 === 0 ? T.purple : T.teal;
 
     s.addShape(pres.shapes.RECTANGLE, {
-      x: 0.35, y, w: 9.3, h: cardH,
-      fill: { color: T.white }, line: { color: T.borderLight, width: 1 },
+      x: 0.35,
+      y,
+      w: 9.3,
+      h: cardH,
+      fill: { color: T.white },
+      line: { color: T.borderLight, width: 1 },
     });
     s.addShape(pres.shapes.RECTANGLE, {
-      x: 0.35, y, w: 0.055, h: cardH,
-      fill: { color: stripe }, line: { color: stripe, width: 0 },
+      x: 0.35,
+      y,
+      w: 0.055,
+      h: cardH,
+      fill: { color: stripe },
+      line: { color: stripe, width: 0 },
     });
     // Number circle
     s.addShape(pres.shapes.OVAL, {
-      x: 0.52, y: y + (cardH - 0.38) / 2, w: 0.38, h: 0.38,
-      fill: { color: stripe }, line: { color: stripe, width: 0 },
+      x: 0.52,
+      y: y + (cardH - 0.38) / 2,
+      w: 0.38,
+      h: 0.38,
+      fill: { color: stripe },
+      line: { color: stripe, width: 0 },
     });
     s.addText(String(i + 1), {
-      x: 0.52, y: y + (cardH - 0.38) / 2, w: 0.38, h: 0.38,
-      fontSize: 12, bold: true, color: T.white, fontFace: "Arial",
-      align: "center", valign: "middle", margin: 0,
+      x: 0.52,
+      y: y + (cardH - 0.38) / 2,
+      w: 0.38,
+      h: 0.38,
+      fontSize: 12,
+      bold: true,
+      color: T.white,
+      fontFace: "Arial",
+      align: "center",
+      valign: "middle",
+      margin: 0,
     });
     s.addText(b, {
-      x: 1.06, y: y + 0.06, w: 8.45, h: cardH - 0.12,
-      fontSize: 14, color: T.textDark, fontFace: "Arial",
-      valign: "middle", margin: 0, rtlMode: true,
+      x: 1.06,
+      y: y + 0.06,
+      w: 8.45,
+      h: cardH - 0.12,
+      fontSize: 14,
+      color: T.textDark,
+      fontFace: "Arial",
+      valign: "middle",
+      margin: 0,
+      rtlMode: true,
     });
   });
 
@@ -743,16 +1046,16 @@ async function convert(inputPath, outputPath) {
 
   for (let i = 0; i < slides.length; i++) {
     const slide = slides[i];
-    const type  = classifySlide(slide.title, slide.bullets, i, slides.length);
+    const type = classifySlide(slide.title, slide.bullets, i, slides.length);
     console.log(`  [${i + 1}/${slides.length}] "${slide.title}" → ${type}`);
 
-    if      (type === "TITLE")      await buildTitleSlide(pres, slide);
-    else if (type === "CODE")       await buildCodeSlide(pres, slide);
-    else if (type === "SUMMARY")    await buildSummarySlide(pres, slide);
-    else if (type === "TAKEAWAYS")  await buildTakeawaysSlide(pres, slide);
+    if (type === "TITLE") await buildTitleSlide(pres, slide);
+    else if (type === "CODE") await buildCodeSlide(pres, slide);
+    else if (type === "SUMMARY") await buildSummarySlide(pres, slide);
+    else if (type === "TAKEAWAYS") await buildTakeawaysSlide(pres, slide);
     else if (type === "TEXT_HEAVY") await buildTextHeavySlide(pres, slide);
-    else if (type === "CONCEPT")    await buildConceptSlide(pres, slide);
-    else                            await buildBulletsSlide(pres, slide);
+    else if (type === "CONCEPT") await buildConceptSlide(pres, slide);
+    else await buildBulletsSlide(pres, slide);
   }
 
   console.log(`💾 Writing: ${outputPath}`);
@@ -764,10 +1067,12 @@ async function convert(inputPath, outputPath) {
 (async () => {
   const args = process.argv.slice(2);
   if (args.length === 0) {
-    console.error("Usage: node docx_to_pptx.js <input.docx|input.txt> [output.pptx]");
+    console.error(
+      "Usage: node docx_to_pptx.js <input.docx|input.txt> [output.pptx]",
+    );
     process.exit(1);
   }
-  const input  = args[0];
+  const input = args[0];
   const output = args[1] || input.replace(/\.(docx|txt)$/i, ".pptx");
   try {
     await convert(input, output);

@@ -752,8 +752,12 @@
       function getFilename(resp, fallback) {
         const cd = resp.headers.get("Content-Disposition") || "";
         const m = cd.match(/filename="([^"]+)"/);
-        if (m) return m[1];
-        return fallback.replace(/\.(docx|txt)$/i, ".pptx");
+        const sourceName = m ? m[1] : fallback;
+        const baseName = sourceName.replace(/\.[^/.]+$/, "");
+        const finalBaseName = /(?:\s+|_)presentation$/i.test(baseName)
+          ? baseName
+          : `${baseName}_presentation`;
+        return `${finalBaseName}.pptx`;
       }
     </script>
   </body>

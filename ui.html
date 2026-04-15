@@ -115,59 +115,6 @@
         overflow: hidden;
       }
 
-      /* ─── Header ──────────────────────────────────────────────────────────── */
-      .header {
-        padding: 32px 36px 28px;
-        border-bottom: 1px solid var(--border);
-        position: relative;
-        overflow: hidden;
-      }
-      .header::before {
-        content: "";
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 3px;
-        background: linear-gradient(
-          90deg,
-          var(--primary),
-          #6366f1,
-          var(--accent)
-        );
-      }
-      .logo-row {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        margin-bottom: 8px;
-      }
-      .logo-icon {
-        width: 36px;
-        height: 36px;
-        background: var(--primary-dim);
-        border: 1px solid var(--border-acc);
-        border-radius: 10px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 17px;
-        flex-shrink: 0;
-      }
-      .logo-text {
-        font-size: 20px;
-        font-weight: 700;
-        letter-spacing: -0.4px;
-      }
-      .logo-text span {
-        color: var(--primary);
-      }
-      .subtitle {
-        font-size: 13px;
-        color: var(--muted);
-        font-weight: 400;
-      }
-
       /* ─── Body ────────────────────────────────────────────────────────────── */
       .body {
         padding: 28px 36px 32px;
@@ -280,19 +227,7 @@
 
       /* ─── Divider ──────────────────────────────────────────────────────────── */
       .divider {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        margin: 20px 0;
-        color: var(--muted);
-        font-size: 12px;
-      }
-      .divider::before,
-      .divider::after {
-        content: "";
-        flex: 1;
-        height: 1px;
-        background: var(--border);
+        margin: 14px 0;
       }
 
       /* ─── Format chips ─────────────────────────────────────────────────────── */
@@ -507,17 +442,6 @@
 
     <main class="page">
       <div class="card" role="main">
-        <!-- Header -->
-        <header class="header">
-          <div class="logo-row">
-            <div class="logo-icon" aria-hidden="true">📄</div>
-            <div class="logo-text">docx <span>→</span> pptx</div>
-          </div>
-          <p class="subtitle">
-            Convert structured Word documents into polished presentations
-          </p>
-        </header>
-
         <!-- Body -->
         <div class="body">
           <!-- Supported formats -->
@@ -553,7 +477,6 @@
 
           <!-- Selected file badge -->
           <div class="file-badge" id="fileBadge" role="status">
-            <span aria-hidden="true">✅</span>
             <span class="file-badge-name" id="fileNameLabel"></span>
             <button
               class="file-badge-clear"
@@ -565,7 +488,7 @@
             </button>
           </div>
 
-          <div class="divider">or</div>
+          <div class="divider"></div>
 
           <!-- Convert button -->
           <button
@@ -575,8 +498,8 @@
             aria-live="polite"
           >
             <span class="btn-inner" id="btnInner">
-              <span aria-hidden="true">✨</span>
               Convert to PowerPoint
+              <span aria-hidden="true">✨</span>
             </span>
           </button>
 
@@ -758,7 +681,7 @@
 
         showStatus(
           "success",
-          `✅ Converted successfully! ${formatBytes(blob.size)} · ${fname}`,
+          `Converted successfully! ${formatBytes(blob.size)} · ${fname}`,
         );
         resetBtn(true);
       });
@@ -806,7 +729,7 @@
       function resetBtn(success = false) {
         convertBtn.disabled = success; // disable after success (must re-select file)
         btnInner.innerHTML = success
-          ? `<span>✅</span> Done! Drop another file to convert again`
+          ? `Done! Drop another file to convert again`
           : `<span>✨</span> Convert to PowerPoint`;
       }
 

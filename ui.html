@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>docx → pptx</title>
+<style>
+  /* ─── Reset & tokens ──────────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:          #080d14;
+    --surface:     rgba(255,255,255,0.05);
+    --surface-hov: rgba(255,255,255,0.08);
+    --border:      rgba(255,255,255,0.10);
+    --border-acc:  rgba(14,165,233,0.6);
+    --primary:     #0ea5e9;
+    --primary-dim: rgba(14,165,233,0.15);
+    --accent:      #f59e0b;
+    --text:        #f1f5f9;
+    --muted:       #64748b;
+    --success:     #22c55e;
+    --error:       #ef4444;
+    --radius:      16px;
+    --font: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 15px;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* ─── Ambient gradient blobs ──────────────────────────────────────────── */
+  .blob {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.18;
+    pointer-events: none;
+    animation: drift 18s ease-in-out infinite alternate;
+  }
+  .blob-1 { width: 500px; height: 500px; background: #0ea5e9; top: -160px; left: -160px; animation-duration: 20s; }
+  .blob-2 { width: 380px; height: 380px; background: #6366f1; bottom: -120px; right: -120px; animation-duration: 25s; animation-delay: -8s; }
+  .blob-3 { width: 260px; height: 260px; background: #f59e0b; top: 40%; left: 60%; animation-duration: 15s; animation-delay: -4s; opacity: 0.10; }
+
+  @keyframes drift {
+    from { transform: translate(0, 0) scale(1); }
+    to   { transform: translate(30px, 20px) scale(1.05); }
+  }
+
+  /* ─── Layout ─────────────────────────────────────────────────────────── */
+  .page {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .card {
+    width: 100%;
+    max-width: 560px;
+    background: rgba(255,255,255,0.04);
+    backdrop-filter: blur(20px) saturate(160%);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 24px 80px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08);
+    overflow: hidden;
+  }
+
+  /* ─── Header ──────────────────────────────────────────────────────────── */
+  .header {
+    padding: 32px 36px 28px;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+  .header::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--primary), #6366f1, var(--accent));
+  }
+  .logo-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+  .logo-icon {
+    width: 36px;
+    height: 36px;
+    background: var(--primary-dim);
+    border: 1px solid var(--border-acc);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    flex-shrink: 0;
+  }
+  .logo-text {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.4px;
+  }
+  .logo-text span { color: var(--primary); }
+  .subtitle {
+    font-size: 13px;
+    color: var(--muted);
+    font-weight: 400;
+  }
+
+  /* ─── Body ────────────────────────────────────────────────────────────── */
+  .body { padding: 28px 36px 32px; }
+
+  /* ─── Drop zone ───────────────────────────────────────────────────────── */
+  .drop-zone {
+    position: relative;
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 40px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s, transform 0.15s;
+    background: transparent;
+    outline: none;
+  }
+  .drop-zone:hover, .drop-zone:focus-visible {
+    border-color: var(--primary);
+    background: var(--primary-dim);
+    transform: translateY(-1px);
+  }
+  .drop-zone.drag-over {
+    border-color: var(--primary);
+    background: var(--primary-dim);
+    transform: scale(1.01);
+    box-shadow: 0 0 0 4px rgba(14,165,233,0.12);
+  }
+  .drop-zone.has-file {
+    border-color: var(--success);
+    border-style: solid;
+    background: rgba(34,197,94,0.06);
+  }
+  .drop-zone input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+  }
+
+  .drop-icon {
+    font-size: 36px;
+    margin-bottom: 12px;
+    display: block;
+    transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  .drop-zone:hover .drop-icon,
+  .drop-zone.drag-over .drop-icon {
+    transform: scale(1.15) translateY(-3px);
+  }
+  .drop-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: var(--text);
+  }
+  .drop-hint {
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .drop-hint strong { color: var(--primary); font-weight: 500; }
+
+  /* file chosen state */
+  .file-badge {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    background: rgba(34,197,94,0.10);
+    border: 1px solid rgba(34,197,94,0.25);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-top: 14px;
+    font-size: 13px;
+    text-align: left;
+    color: #86efac;
+  }
+  .file-badge.visible { display: flex; }
+  .file-badge-name { flex: 1; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .file-badge-clear {
+    cursor: pointer;
+    font-size: 16px;
+    color: var(--muted);
+    transition: color 0.15s;
+    background: none;
+    border: none;
+    line-height: 1;
+    padding: 0;
+    flex-shrink: 0;
+  }
+  .file-badge-clear:hover { color: var(--error); }
+
+  /* ─── Divider ──────────────────────────────────────────────────────────── */
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 20px 0;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .divider::before, .divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ─── Format chips ─────────────────────────────────────────────────────── */
+  .format-row {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin-bottom: 24px;
+  }
+  .chip {
+    padding: 5px 12px;
+    border-radius: 100px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    background: var(--surface);
+  }
+  .chip.active {
+    border-color: var(--border-acc);
+    color: var(--primary);
+    background: var(--primary-dim);
+  }
+
+  /* ─── Convert button ───────────────────────────────────────────────────── */
+  .btn-convert {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, #0ea5e9, #2563eb);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    letter-spacing: -0.2px;
+    position: relative;
+    overflow: hidden;
+    transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+    box-shadow: 0 4px 24px rgba(14,165,233,0.25);
+  }
+  .btn-convert::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(255,255,255,0.1) 0%, transparent 100%);
+    pointer-events: none;
+  }
+  .btn-convert:hover:not(:disabled) {
+    opacity: 0.92;
+    transform: translateY(-1px);
+    box-shadow: 0 8px 32px rgba(14,165,233,0.35);
+  }
+  .btn-convert:active:not(:disabled) {
+    transform: translateY(0) scale(0.98);
+  }
+  .btn-convert:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+  .btn-inner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  /* ─── Progress bar ─────────────────────────────────────────────────────── */
+  .progress-wrap {
+    margin-top: 16px;
+    display: none;
+  }
+  .progress-wrap.visible { display: block; }
+  .progress-bar-track {
+    height: 4px;
+    background: var(--border);
+    border-radius: 100px;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary), #6366f1);
+    border-radius: 100px;
+    width: 0%;
+    transition: width 0.4s ease;
+    animation: shimmer 1.5s infinite;
+    background-size: 200% 100%;
+  }
+  @keyframes shimmer {
+    0%   { background-position: 200% center; }
+    100% { background-position: -200% center; }
+  }
+  .progress-label {
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .spinner {
+    width: 12px; height: 12px;
+    border: 2px solid rgba(255,255,255,0.1);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ─── Status messages ─────────────────────────────────────────────────── */
+  .status {
+    margin-top: 14px;
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 13px;
+    line-height: 1.5;
+    display: none;
+    animation: fadein 0.25s ease;
+  }
+  @keyframes fadein { from { opacity:0; transform: translateY(4px); } to { opacity:1; transform: none; } }
+  .status.visible { display: block; }
+  .status.success { background: rgba(34,197,94,0.10); border: 1px solid rgba(34,197,94,0.22); color: #86efac; }
+  .status.error   { background: rgba(239,68,68,0.10);  border: 1px solid rgba(239,68,68,0.22);  color: #fca5a5; }
+
+  /* ─── Download button ──────────────────────────────────────────────────── */
+  .btn-download {
+    margin-top: 10px;
+    width: 100%;
+    padding: 11px;
+    background: rgba(34,197,94,0.12);
+    color: #86efac;
+    font-size: 14px;
+    font-weight: 600;
+    border: 1px solid rgba(34,197,94,0.25);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.15s;
+    display: none;
+    animation: fadein 0.3s ease;
+    text-decoration: none;
+    text-align: center;
+  }
+  .btn-download.visible { display: block; }
+  .btn-download:hover { background: rgba(34,197,94,0.2); transform: translateY(-1px); }
+
+  /* ─── Footer / how-to ─────────────────────────────────────────────────── */
+  .footer {
+    padding: 16px 36px 20px;
+    border-top: 1px solid var(--border);
+    background: rgba(0,0,0,0.15);
+  }
+  .steps-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 10px;
+  }
+  .steps {
+    display: flex;
+    gap: 0;
+    counter-reset: step;
+  }
+  .step {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    text-align: center;
+    font-size: 11px;
+    color: var(--muted);
+    position: relative;
+  }
+  .step:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 13px;
+    right: 0;
+    width: 50%;
+    height: 1px;
+    background: var(--border);
+  }
+  .step:not(:first-child)::before {
+    content: '';
+    position: absolute;
+    top: 13px;
+    left: 0;
+    width: 50%;
+    height: 1px;
+    background: var(--border);
+  }
+  .step-num {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--primary);
+    flex-shrink: 0;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ─── Reduced motion ──────────────────────────────────────────────────── */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Ambient blobs -->
+<div class="blob blob-1" aria-hidden="true"></div>
+<div class="blob blob-2" aria-hidden="true"></div>
+<div class="blob blob-3" aria-hidden="true"></div>
+
+<main class="page">
+  <div class="card" role="main">
+
+    <!-- Header -->
+    <header class="header">
+      <div class="logo-row">
+        <div class="logo-icon" aria-hidden="true">📄</div>
+        <div class="logo-text">docx <span>→</span> pptx</div>
+      </div>
+      <p class="subtitle">Convert structured Word documents into polished presentations</p>
+    </header>
+
+    <!-- Body -->
+    <div class="body">
+
+      <!-- Supported formats -->
+      <div class="format-row">
+        <span class="chip active">.docx</span>
+        <span class="chip active">.txt</span>
+        <span class="chip">→ .pptx</span>
+      </div>
+
+      <!-- Drop zone -->
+      <div
+        class="drop-zone"
+        id="dropZone"
+        role="button"
+        tabindex="0"
+        aria-label="Drop a DOCX or TXT file here, or click to browse"
+        aria-describedby="dropHint"
+      >
+        <input
+          type="file"
+          id="fileInput"
+          accept=".docx,.txt"
+          aria-hidden="true"
+          tabindex="-1"
+        />
+        <span class="drop-icon" id="dropIcon" aria-hidden="true">📂</span>
+        <p class="drop-title" id="dropTitle">Drop your file here</p>
+        <p class="drop-hint" id="dropHint">
+          Supports <strong>.docx</strong> and <strong>.txt</strong> &nbsp;·&nbsp; Max 50 MB
+        </p>
+      </div>
+
+      <!-- Selected file badge -->
+      <div class="file-badge" id="fileBadge" role="status">
+        <span aria-hidden="true">✅</span>
+        <span class="file-badge-name" id="fileNameLabel"></span>
+        <button class="file-badge-clear" id="clearBtn" title="Remove file" aria-label="Remove selected file">×</button>
+      </div>
+
+      <div class="divider">or</div>
+
+      <!-- Convert button -->
+      <button class="btn-convert" id="convertBtn" disabled aria-live="polite">
+        <span class="btn-inner" id="btnInner">
+          <span aria-hidden="true">✨</span>
+          Convert to PowerPoint
+        </span>
+      </button>
+
+      <!-- Progress -->
+      <div class="progress-wrap" id="progressWrap" role="progressbar" aria-label="Conversion progress">
+        <div class="progress-bar-track">
+          <div class="progress-bar-fill" id="progressFill"></div>
+        </div>
+        <div class="progress-label">
+          <span class="spinner" aria-hidden="true"></span>
+          <span id="progressText">Processing your document…</span>
+        </div>
+      </div>
+
+      <!-- Status -->
+      <div class="status" id="statusBox" role="alert" aria-live="assertive"></div>
+
+      <!-- Download link -->
+      <a class="btn-download" id="downloadBtn" role="button" aria-label="Download converted PowerPoint">
+        ⬇ Download Presentation
+      </a>
+
+    </div>
+
+    <!-- Footer steps -->
+    <footer class="footer">
+      <p class="steps-label">How it works</p>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <span>Drop your<br>DOCX / TXT</span>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <span>Click<br>Convert</span>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <span>Download<br>your PPTX</span>
+        </div>
+      </div>
+    </footer>
+
+  </div>
+</main>
+
+<script>
+// ── Elements ──────────────────────────────────────────────────────────────────
+const dropZone    = document.getElementById("dropZone");
+const fileInput   = document.getElementById("fileInput");
+const dropIcon    = document.getElementById("dropIcon");
+const dropTitle   = document.getElementById("dropTitle");
+const dropHint    = document.getElementById("dropHint");
+const fileBadge   = document.getElementById("fileBadge");
+const fileNameLbl = document.getElementById("fileNameLabel");
+const clearBtn    = document.getElementById("clearBtn");
+const convertBtn  = document.getElementById("convertBtn");
+const btnInner    = document.getElementById("btnInner");
+const progressWrap= document.getElementById("progressWrap");
+const progressFill= document.getElementById("progressFill");
+const progressTxt = document.getElementById("progressText");
+const statusBox   = document.getElementById("statusBox");
+const downloadBtn = document.getElementById("downloadBtn");
+
+let selectedFile = null;
+
+// ── File selection ────────────────────────────────────────────────────────────
+function setFile(file) {
+  if (!file) return;
+  const ext = file.name.split(".").pop().toLowerCase();
+  if (!["docx","txt"].includes(ext)) {
+    showStatus("error", `❌ Unsupported format ".${ext}". Please use .docx or .txt`);
+    return;
+  }
+  selectedFile = file;
+  fileNameLbl.textContent = file.name;
+  fileBadge.classList.add("visible");
+  dropIcon.textContent = "📄";
+  dropTitle.textContent = "File selected";
+  dropHint.innerHTML = `<strong>${file.name}</strong> · ${formatBytes(file.size)}`;
+  dropZone.classList.add("has-file");
+  convertBtn.disabled = false;
+  hideStatus();
+  downloadBtn.classList.remove("visible");
+}
+
+function clearFile() {
+  selectedFile = null;
+  fileInput.value = "";
+  fileBadge.classList.remove("visible");
+  dropIcon.textContent = "📂";
+  dropTitle.textContent = "Drop your file here";
+  dropHint.innerHTML = `Supports <strong>.docx</strong> and <strong>.txt</strong> &nbsp;·&nbsp; Max 50 MB`;
+  dropZone.classList.remove("has-file");
+  convertBtn.disabled = true;
+  hideStatus();
+  downloadBtn.classList.remove("visible");
+}
+
+// ── Drag & drop ───────────────────────────────────────────────────────────────
+dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("drag-over"); });
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
+dropZone.addEventListener("drop", e => {
+  e.preventDefault();
+  dropZone.classList.remove("drag-over");
+  const file = e.dataTransfer.files[0];
+  if (file) setFile(file);
+});
+dropZone.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") fileInput.click(); });
+fileInput.addEventListener("change", () => { if (fileInput.files[0]) setFile(fileInput.files[0]); });
+clearBtn.addEventListener("click", e => { e.stopPropagation(); clearFile(); });
+
+// ── Convert ───────────────────────────────────────────────────────────────────
+convertBtn.addEventListener("click", async () => {
+  if (!selectedFile) return;
+
+  // Lock UI
+  convertBtn.disabled = true;
+  btnInner.innerHTML = `<span class="spinner"></span> Converting…`;
+  progressWrap.classList.add("visible");
+  hideStatus();
+  downloadBtn.classList.remove("visible");
+
+  // Animate progress bar (fake — real conversion is opaque)
+  animateProgress();
+
+  const form = new FormData();
+  form.append("file", selectedFile, selectedFile.name);
+
+  let resp;
+  try {
+    resp = await fetch("/convert", { method: "POST", body: form });
+  } catch (e) {
+    endProgress();
+    showStatus("error", "❌ Could not reach the server. Is it running?\n\nRun: node server.js");
+    resetBtn();
+    return;
+  }
+
+  endProgress();
+
+  if (!resp.ok) {
+    let errText = "";
+    try { const j = await resp.json(); errText = j.error || ""; } catch (_) { errText = await resp.text(); }
+    showStatus("error", "❌ Conversion failed:\n\n" + errText.slice(0, 400));
+    resetBtn();
+    return;
+  }
+
+  // Success — create object URL and trigger download
+  const blob    = await resp.blob();
+  const fname   = getFilename(resp, selectedFile.name);
+  const url     = URL.createObjectURL(blob);
+
+  downloadBtn.href     = url;
+  downloadBtn.download = fname;
+  downloadBtn.classList.add("visible");
+  downloadBtn.textContent = `⬇ Download ${fname}`;
+
+  showStatus("success", `✅ Converted successfully! ${formatBytes(blob.size)} · ${fname}`);
+  resetBtn(true);
+});
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+let progressInterval = null;
+let prog = 0;
+
+function animateProgress() {
+  prog = 0;
+  progressFill.style.width = "0%";
+  progressTxt.textContent = "Processing your document…";
+  clearInterval(progressInterval);
+
+  const messages = [
+    [15, "Parsing slide structure…"],
+    [35, "Generating slide layouts…"],
+    [55, "Rendering icons & highlights…"],
+    [75, "Building PowerPoint file…"],
+    [88, "Finalising…"],
+  ];
+  let mi = 0;
+
+  progressInterval = setInterval(() => {
+    // Ease toward 92% but never reach it until done
+    prog = prog + (92 - prog) * 0.08;
+    progressFill.style.width = prog + "%";
+
+    if (mi < messages.length && prog >= messages[mi][0]) {
+      progressTxt.textContent = messages[mi][1];
+      mi++;
+    }
+  }, 200);
+}
+
+function endProgress() {
+  clearInterval(progressInterval);
+  progressFill.style.width = "100%";
+  progressFill.style.transition = "width 0.3s ease";
+  setTimeout(() => { progressWrap.classList.remove("visible"); }, 500);
+}
+
+function resetBtn(success = false) {
+  convertBtn.disabled = success; // disable after success (must re-select file)
+  btnInner.innerHTML = success
+    ? `<span>✅</span> Done! Drop another file to convert again`
+    : `<span>✨</span> Convert to PowerPoint`;
+}
+
+function showStatus(type, msg) {
+  statusBox.className = `status visible ${type}`;
+  statusBox.textContent = msg;
+}
+
+function hideStatus() {
+  statusBox.className = "status";
+  statusBox.textContent = "";
+}
+
+function formatBytes(n) {
+  if (n < 1024) return n + " B";
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+  return (n / 1024 / 1024).toFixed(1) + " MB";
+}
+
+function getFilename(resp, fallback) {
+  const cd = resp.headers.get("Content-Disposition") || "";
+  const m  = cd.match(/filename="([^"]+)"/);
+  if (m) return m[1];
+  return fallback.replace(/\.(docx|txt)$/i, ".pptx");
+}
+</script>
+</body>
+</html>

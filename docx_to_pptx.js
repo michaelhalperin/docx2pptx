@@ -15,6 +15,22 @@
 const fs = require("fs");
 const path = require("path");
 
+// ─── RTL / LTR detection ──────────────────────────────────────────────────────
+// Returns true if the string should be rendered RTL (Hebrew / Arabic).
+// Logic: if there are any Hebrew/Arabic characters at all, treat as RTL.
+// This matches real-world usage — mixed Hebrew+English strings in Israeli
+// content are always RTL context (the Hebrew drives the reading direction).
+function isRtl(text) {
+  if (!text) return false;
+  // Any Hebrew (0590-05FF) or Arabic (0600-06FF) character → RTL
+  return /[\u0590-\u05FF\u0600-\u06FF]/.test(text);
+}
+
+// Shorthand: returns { rtlMode: true/false } for a given string
+function rtl(text) {
+  return { rtlMode: isRtl(text) };
+}
+
 // ─── KodKode Brand Theme ──────────────────────────────────────────────────────
 const T = {
   white: "FFFFFF",
@@ -140,7 +156,7 @@ function addLogo(pres, s) {
       valign: "middle",
       margin: 0,
       lineSpacingMultiple: 1.2,
-      rtlMode: true,
+      rtlMode: true, // Logo subtitle is always Hebrew
     },
   );
 }
@@ -194,18 +210,25 @@ function addChrome(pres, s, title, hashBadge = true) {
       margin: 0,
     });
 
-    // Title text (gray, not bold, large)
+    // Title text — stays strictly within the left zone
+    // Always left-aligned so it never expands toward the logo.
+    // rtlMode handles bidi rendering of Hebrew text correctly.
+    const titleRtl = isRtl(title);
+    const titleX = 0.84;
+    const titleMaxW = LOGO_X - titleX - 0.35;
     s.addText(title, {
-      x: 0.84,
+      x: titleX,
       y: GRAD_H + 0.05,
-      w: LOGO_X - 0.95,
+      w: titleMaxW,
       h: HEADER_H - GRAD_H - 0.05,
       fontSize: 22,
       bold: false,
       color: T.textGray,
       fontFace: "Arial",
+      align: "left", // always left — prevents overflow toward logo
       valign: "middle",
       margin: 0,
+      rtlMode: titleRtl,
     });
 
     // Thin horizontal rule under header
@@ -250,7 +273,7 @@ function addChrome(pres, s, title, hashBadge = true) {
     align: "center",
     valign: "middle",
     margin: 0,
-    rtlMode: true,
+    rtlMode: isRtl("קודקוד — התוכנית החרדית ליחידות הייטק במערכת הביטחון"),
   });
 }
 
@@ -283,86 +306,146 @@ async function parseDocx(filePath) {
 
 /**
  * Parse mammoth HTML output.
- * A slide starts at every <p><strong>…</strong></p> (bold paragraph = title).
- * Bullet points come from <ul><li>…</li></ul> blocks.
- * Plain <p> after a title (no bold) = code lines, collected as bullets.
+ *
+ * Handles both team formats automatically:
+ *
+ * Format A — h2 headings (slides can share a Word page)
+ *   <h2><strong>שקופית N – Title</strong></h2>
+ *   <p>• bullet  • bullet</p>
+ *   <p>code line</p>
+ *
+ * Format B — bold paragraphs (one slide per page, each title is a bold <p>)
+ *   <p><strong>Title</strong></p>
+ *   <ul><li>bullet</li></ul>
+ *
+ * Rules:
+ *   - <h2>/<h3> → always starts a new slide (strips "שקופית N –" prefix)
+ *   - <p><strong>…</strong></p> (entire paragraph is bold) → new slide title
+ *   - <ul><li> → bullets
+ *   - <p> with "•" → split into bullets on the bullet character
+ *   - <p> without "•" → each <br>-separated line is a content item (code/text)
  */
 function parseHtml(html) {
   const slides = [];
   let current = null;
 
-  // Tokenise: split on tags we care about
-  // Each token is either a tag or text content
-  const tokens = html.split(/(<\/?(?:p|ul|li|strong|h[1-6])[^>]*>)/i);
+  // Replace <br> with a sentinel we can split on after tag-stripping
+  const norm = html.replace(/<br\s*\/?>/gi, "⏎");
 
+  const tokens = norm.split(/(<\/?(?:p|ul|li|strong|h[1-6])[^>]*>)/i);
+
+  let inHeading = false;
+  let headingText = "";
   let inStrong = false;
-  let inLi = false;
   let inP = false;
   let pText = "";
+  let pHadBold = false;
+  let inLi = false;
   let liText = "";
 
-  function flush() {
-    // Called when a paragraph or list item ends
+  function newSlide(rawTitle) {
+    // Strip slide number prefix and any stray sentinel/newline chars from title
+    const title = rawTitle
+      .replace(/^שקופית\s+\d+\s*[–\-:]\s*/u, "")
+      .replace(/⏎/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!title) return;
+    if (current) slides.push(current);
+    current = { title, bullets: [] };
   }
 
-  // Simple state-machine parser
-  let i = 0;
-  while (i < tokens.length) {
-    const tok = tokens[i];
+  function addContent(raw) {
+    if (!current) return;
+    const text = raw.trim();
+    if (!text) return;
+    if (text.includes("•")) {
+      // Bullet-separated list on one line
+      text
+        .split("•")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .forEach((b) => current.bullets.push(b));
+    } else {
+      // ⏎ = original <br> — treat each line as its own item
+      text
+        .split("⏎")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .forEach((b) => current.bullets.push(b));
+    }
+  }
 
-    if (/^<strong>/i.test(tok)) {
+  for (const tok of tokens) {
+    if (/^<h[1-6]/i.test(tok)) {
+      inHeading = true;
+      headingText = "";
+    } else if (/^<\/h[1-6]>/i.test(tok)) {
+      newSlide(decodeHtmlEntities(stripTags(headingText)));
+      inHeading = false;
+      headingText = "";
+    } else if (/^<strong>/i.test(tok)) {
       inStrong = true;
     } else if (/^<\/strong>/i.test(tok)) {
       inStrong = false;
     } else if (/^<p[^>]*>/i.test(tok)) {
       inP = true;
       pText = "";
+      pHadBold = false;
     } else if (/^<\/p>/i.test(tok)) {
-      const t = stripTags(pText).trim();
-      if (t) {
-        if (inStrong || pWasBold) {
-          // Bold paragraph = new slide title
-          if (current) slides.push(current);
-          current = { title: t, bullets: [] };
-        } else if (current) {
-          // Plain paragraph under a slide = code line / extra bullet
-          current.bullets.push(t);
+      const text = decodeHtmlEntities(stripTags(pText)).trim();
+      if (text) {
+        // Bold paragraph = new slide title ONLY if it looks like a title:
+        //   - entirely bold (pHadBold)
+        //   - no bullet characters
+        //   - reasonably short (< 100 chars)
+        //   - not starting with code-like characters
+        const looksLikeTitle =
+          pHadBold &&
+          !text.includes("•") &&
+          !text.includes("⏎") &&
+          text.length < 100 &&
+          !/^[\s({[\/"'`]/.test(text);
+
+        if (looksLikeTitle && !inHeading) {
+          newSlide(text);
         } else {
-          current = { title: t, bullets: [] };
+          addContent(text);
         }
       }
       inP = false;
       pText = "";
-      pWasBold = false;
+      pHadBold = false;
     } else if (/^<li[^>]*>/i.test(tok)) {
       inLi = true;
       liText = "";
     } else if (/^<\/li>/i.test(tok)) {
-      const t = stripTags(liText).trim();
+      const t = decodeHtmlEntities(stripTags(liText)).trim();
       if (t && current) current.bullets.push(t);
       inLi = false;
       liText = "";
-    } else if (/^<h[1-6]/i.test(tok)) {
-      // Headings also act as slide titles — collect text until </hN>
     } else {
       // Text node
-      const text = decodeHtmlEntities(tok);
-      if (inLi) liText += text;
+      if (inHeading) headingText += tok;
+      else if (inLi) liText += tok;
       else if (inP) {
-        pText += text;
-        if (inStrong) pWasBold = true;
+        pText += tok;
+        if (inStrong) pHadBold = true;
       }
     }
-    i++;
   }
   if (current) slides.push(current);
 
-  slides.forEach((s, idx) => (s.index = idx));
+  // Final cleanup — strip any stray ⏎ sentinels from bullet text
+  slides.forEach((s, idx) => {
+    s.index = idx;
+    s.bullets = s.bullets
+      .map((b) => b.replace(/⏎/g, " ").replace(/\s+/g, " ").trim())
+      .filter(Boolean);
+  });
+
   return slides;
 }
-
-// Tracks whether the current <p> contained a <strong> child
-let pWasBold = false;
 
 function stripTags(str) {
   return str.replace(/<[^>]*>/g, "");
@@ -475,7 +558,8 @@ async function buildTitleSlide(pres, slide) {
     line: { color: T.purple, width: 0 },
   });
 
-  // Main title (large, gray, RTL)
+  // Main title (large, gray)
+  const titleRtl = isRtl(slide.title);
   s.addText(slide.title, {
     x: 0.55,
     y: 1.1,
@@ -485,26 +569,36 @@ async function buildTitleSlide(pres, slide) {
     bold: true,
     color: "AAAAAA",
     fontFace: "Arial",
+    align: titleRtl ? "right" : "left",
     valign: "middle",
     margin: 0,
-    rtlMode: true,
+    rtlMode: titleRtl,
   });
 
-  // Subtopic pills / bullets row
-  const subs = slide.bullets.slice(0, 5);
+  // Subtopic bullets — use slide title direction for consistency
+  const subs = slide.bullets.slice(0, 4);
   if (subs.length > 0) {
-    s.addText(subs.join("  ·  "), {
-      x: 0.55,
-      y: 3.1,
-      w: 8.5,
-      h: 0.45,
-      fontSize: 13,
-      color: T.textGray,
-      fontFace: "Arial",
-      valign: "middle",
-      margin: 0,
-      italic: true,
-      rtlMode: true,
+    const slideRtl = isRtl(slide.title + " " + subs.join(" "));
+    const lineH = Math.min(0.48, 1.9 / subs.length);
+    subs.forEach((b, i) => {
+      s.addText(
+        [
+          { text: "· ", options: { color: T.purple, bold: true } },
+          { text: b, options: { color: T.textGray, italic: true } },
+        ],
+        {
+          x: 0.55,
+          y: 3.0 + i * lineH,
+          w: 8.5,
+          h: lineH,
+          fontSize: 14,
+          fontFace: "Arial",
+          align: slideRtl ? "right" : "left",
+          valign: "middle",
+          margin: 0,
+          rtlMode: slideRtl,
+        },
+      );
     });
   }
 
@@ -536,33 +630,41 @@ async function buildTitleSlide(pres, slide) {
     align: "center",
     valign: "middle",
     margin: 0,
-    rtlMode: true,
+    rtlMode: isRtl("קודקוד — התוכנית החרדית ליחידות הייטק במערכת הביטחון"),
   });
 }
 
-// ─── Slide: General Bullets (third screenshot layout) ───────────────────────
+// ─── Slide: General Bullets ──────────────────────────────────────────────────
 async function buildBulletsSlide(pres, slide) {
   const s = pres.addSlide();
   s.background = { color: T.white };
   addChrome(pres, s, slide.title);
 
-  const bullets = slide.bullets.slice(0, 6);
+  const bullets = slide.bullets;
   if (bullets.length === 0) return s;
 
-  const freeText = bullets.map((b) => `• ${b}`).join("\n\n");
-  s.addText(freeText, {
-    x: 0.55,
-    y: CONTENT_Y + 0.12,
-    w: 8.9,
-    h: FOOTER_Y - CONTENT_Y - 0.24,
+  // Detect dominant direction from all bullet text combined
+  const allText = bullets.join(" ");
+  const rtl = isRtl(allText);
+
+  // Plain text — one line per bullet, • character inline (no native bullet property)
+  // RTL: "text •"  |  LTR: "• text"
+  const lines = bullets.map((b) => (rtl ? `${b}  •` : `•  ${b}`));
+  const fullText = lines.join("\n");
+
+  s.addText(fullText, {
+    x: 0.5,
+    y: CONTENT_Y + 0.2,
+    w: 9.0,
+    h: FOOTER_Y - CONTENT_Y - 0.35,
+    fontFace: "Arial",
     fontSize: 18,
     color: T.textDark,
-    fontFace: "Arial",
+    align: rtl ? "right" : "left",
     valign: "top",
     margin: 0,
-    rtlMode: true,
-    breakLine: true,
-    lineSpacingMultiple: 1.2,
+    rtlMode: rtl,
+    lineSpacingMultiple: 1.7,
     fit: "shrink",
   });
 
@@ -630,45 +732,69 @@ async function buildCodeSlide(pres, slide) {
     line: { color: T.borderLight, width: 1 },
   });
 
-  // ── Code lines: use actual slide bullets if present, else template ──────
-  // Each bullet = one line of code
-  const lineH = 0.235;
+  // ── Code content — all lines in one text box, shrinks to fit ────────────
   const hasRealCode = slide.bullets.length > 0;
-  const codeLines = hasRealCode
-    ? slide.bullets.map((b) => [{ text: b, options: { color: "333333" } }])
-    : buildCodeContent(slide.title);
+  const codeBodyY = areaY + 0.32;
+  const codeBodyH = areaH - 0.32;
 
-  codeLines.forEach((lineTokens, li) => {
-    const ly = areaY + 0.32 + 0.08 + li * lineH;
-    if (ly + lineH > FOOTER_Y - 0.1) return;
-
-    // Line number
-    s.addText(String(li + 1), {
-      x: splitX + 0.06,
-      y: ly,
-      w: 0.28,
-      h: lineH,
-      fontSize: 9.5,
-      color: T.codeNum,
-      fontFace: "Consolas",
-      align: "right",
-      valign: "top",
-      margin: 0,
+  if (hasRealCode) {
+    // Build numbered lines as rich-text array
+    const richLines = [];
+    slide.bullets.forEach((line, li) => {
+      if (li > 0) richLines.push({ text: "\n", options: { fontSize: 10 } });
+      richLines.push({
+        text: String(li + 1).padStart(2, " ") + "  ",
+        options: { color: T.codeNum, fontSize: 10, fontFace: "Consolas" },
+      });
+      richLines.push({
+        text: line,
+        options: { color: "222222", fontSize: 10, fontFace: "Consolas" },
+      });
     });
-
-    // Code tokens
-    s.addText(lineTokens, {
-      x: splitX + 0.38,
-      y: ly,
-      w: codeW - 0.44,
-      h: lineH,
-      fontSize: 10.5,
-      fontFace: "Consolas",
-      align: "left",
+    s.addText(richLines, {
+      x: splitX + 0.08,
+      y: codeBodyY + 0.08,
+      w: codeW - 0.16,
+      h: codeBodyH - 0.12,
       valign: "top",
+      align: "left", // Code is ALWAYS LTR regardless of content language
+      rtlMode: false,
       margin: 0,
+      lineSpacingMultiple: 1.35,
+      fit: "shrink",
     });
-  });
+  } else {
+    // Template fallback — fixed line-by-line
+    const lineH = 0.235;
+    const templateLines = buildCodeContent(slide.title);
+    templateLines.forEach((lineTokens, li) => {
+      const ly = codeBodyY + 0.08 + li * lineH;
+      if (ly + lineH > FOOTER_Y - 0.1) return;
+      s.addText(String(li + 1), {
+        x: splitX + 0.06,
+        y: ly,
+        w: 0.28,
+        h: lineH,
+        fontSize: 9.5,
+        color: T.codeNum,
+        fontFace: "Consolas",
+        align: "right",
+        valign: "top",
+        margin: 0,
+      });
+      s.addText(lineTokens, {
+        x: splitX + 0.38,
+        y: ly,
+        w: codeW - 0.44,
+        h: lineH,
+        fontSize: 10.5,
+        fontFace: "Consolas",
+        align: "left",
+        valign: "top",
+        margin: 0,
+      });
+    });
+  }
 
   // ── Right: definition box (teal border, purple label) ────────────────
   s.addShape(pres.shapes.RECTANGLE, {
@@ -700,7 +826,7 @@ async function buildCodeSlide(pres, slide) {
     fontFace: "Arial",
     valign: "middle",
     margin: 0,
-    rtlMode: true,
+    rtlMode: isRtl("הגדרה"),
   });
 
   // Definition box is intentionally left blank — to be filled manually in PowerPoint
@@ -714,7 +840,7 @@ async function buildCodeSlide(pres, slide) {
     fontFace: "Arial",
     valign: "top",
     margin: 0,
-    rtlMode: true,
+    rtlMode: isRtl("הכנס כאן את ההגדרה בעברית..."),
     wrap: true,
     italic: true,
   });
@@ -840,7 +966,7 @@ async function buildConceptSlide(pres, slide) {
     align: "center",
     valign: "middle",
     margin: 0,
-    rtlMode: true,
+    rtlMode: isRtl(slide.title),
   });
 
   return s;
@@ -877,7 +1003,7 @@ async function buildTextHeavySlide(pres, slide) {
       fontFace: "Arial",
       valign: "middle",
       margin: 0,
-      rtlMode: true,
+      rtlMode: isRtl(b),
       wrap: true,
     });
   });
@@ -887,6 +1013,11 @@ async function buildTextHeavySlide(pres, slide) {
 
 // ─── Slide: Summary ──────────────────────────────────────────────────────────
 async function buildSummarySlide(pres, slide) {
+  // If more than 3 bullets, use bullets layout instead (avoids empty extra slide)
+  if (slide.bullets.length > 3) {
+    return await buildBulletsSlide(pres, slide);
+  }
+
   const s = pres.addSlide();
   s.background = { color: T.white };
   addChrome(pres, s, slide.title);
@@ -950,7 +1081,7 @@ async function buildSummarySlide(pres, slide) {
       fontFace: "Arial",
       valign: "top",
       margin: 0,
-      rtlMode: true,
+      rtlMode: isRtl(b),
       wrap: true,
       lineSpacingMultiple: 1.35,
     });
@@ -965,12 +1096,13 @@ async function buildTakeawaysSlide(pres, slide) {
   s.background = { color: T.white };
   addChrome(pres, s, slide.title);
 
-  const bullets = slide.bullets.slice(0, 5);
+  const bullets = slide.bullets;
   const gap = 0.12;
   const availH = FOOTER_Y - CONTENT_Y - 0.1;
   const cardH = Math.min(
     0.75,
-    (availH - gap * (bullets.length - 1)) / bullets.length,
+    (availH - gap * (Math.max(bullets.length, 1) - 1)) /
+      Math.max(bullets.length, 1),
   );
   const totalH = bullets.length * cardH + (bullets.length - 1) * gap;
   const startY = CONTENT_Y + (availH - totalH) / 2;
@@ -1027,7 +1159,7 @@ async function buildTakeawaysSlide(pres, slide) {
       fontFace: "Arial",
       valign: "middle",
       margin: 0,
-      rtlMode: true,
+      rtlMode: isRtl(b),
     });
   });
 

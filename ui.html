@@ -422,6 +422,30 @@
         background: rgba(34, 197, 94, 0.2);
         transform: translateY(-1px);
       }
+      .btn-download-all {
+        margin-top: 10px;
+        width: 100%;
+        padding: 11px;
+        background: rgba(96, 165, 250, 0.12);
+        color: #93c5fd;
+        font-size: 14px;
+        font-weight: 600;
+        border: 1px solid rgba(96, 165, 250, 0.25);
+        border-radius: 8px;
+        cursor: pointer;
+        transition:
+          background 0.2s,
+          transform 0.15s;
+        display: none;
+        animation: fadein 0.3s ease;
+      }
+      .btn-download-all.visible {
+        display: block;
+      }
+      .btn-download-all:hover {
+        background: rgba(96, 165, 250, 0.2);
+        transform: translateY(-1px);
+      }
 
       /* ─── Reduced motion ──────────────────────────────────────────────────── */
       @media (prefers-reduced-motion: reduce) {
@@ -464,11 +488,12 @@
               type="file"
               id="fileInput"
               accept=".docx,.txt"
+              multiple
               aria-hidden="true"
               tabindex="-1"
             />
             <span class="drop-icon" id="dropIcon" aria-hidden="true">📂</span>
-            <p class="drop-title" id="dropTitle">Drop your file here</p>
+            <p class="drop-title" id="dropTitle">Drop your files here</p>
             <p class="drop-hint" id="dropHint">
               Supports <strong>.docx</strong> and
               <strong>.txt</strong> &nbsp;·&nbsp; Max 50 MB
@@ -527,15 +552,12 @@
             aria-live="assertive"
           ></div>
 
-          <!-- Download link -->
-          <a
-            class="btn-download"
-            id="downloadBtn"
-            role="button"
-            aria-label="Download converted PowerPoint"
-          >
-            ⬇ Download Presentation
-          </a>
+          <button class="btn-download-all" id="downloadAllBtn" type="button">
+            ⬇ Download all (choose folder)
+          </button>
+
+          <!-- Download links -->
+          <div id="downloadList"></div>
         </div>
       </div>
     </main>
@@ -556,44 +578,57 @@
       const progressFill = document.getElementById("progressFill");
       const progressTxt = document.getElementById("progressText");
       const statusBox = document.getElementById("statusBox");
-      const downloadBtn = document.getElementById("downloadBtn");
+      const downloadAllBtn = document.getElementById("downloadAllBtn");
+      const downloadList = document.getElementById("downloadList");
 
-      let selectedFile = null;
+      let selectedFiles = [];
+      let downloads = [];
 
       // ── File selection ────────────────────────────────────────────────────────────
-      function setFile(file) {
-        if (!file) return;
-        const ext = file.name.split(".").pop().toLowerCase();
-        if (!["docx", "txt"].includes(ext)) {
+      function setFiles(files) {
+        if (!files || files.length === 0) return;
+
+        const invalidFiles = files.filter((file) => !isSupportedFile(file));
+        if (invalidFiles.length > 0) {
           showStatus(
             "error",
-            `❌ Unsupported format ".${ext}". Please use .docx or .txt`,
+            `❌ Unsupported files: ${invalidFiles
+              .map((file) => file.name)
+              .join(", ")}. Please use .docx or .txt`,
           );
           return;
         }
-        selectedFile = file;
-        fileNameLbl.textContent = file.name;
+
+        selectedFiles = files;
+        fileNameLbl.textContent =
+          files.length === 1
+            ? files[0].name
+            : `${files.length} files selected (${files[0].name} +${files.length - 1} more)`;
         fileBadge.classList.add("visible");
         dropIcon.textContent = "📄";
-        dropTitle.textContent = "File selected";
-        dropHint.innerHTML = `<strong>${file.name}</strong> · ${formatBytes(file.size)}`;
+        dropTitle.textContent =
+          files.length === 1 ? "File selected" : "Files selected";
+        dropHint.innerHTML =
+          files.length === 1
+            ? `<strong>${files[0].name}</strong> · ${formatBytes(files[0].size)}`
+            : `<strong>${files.length} files</strong> ready for conversion`;
         dropZone.classList.add("has-file");
         convertBtn.disabled = false;
         hideStatus();
-        downloadBtn.classList.remove("visible");
+        clearDownloads();
       }
 
       function clearFile() {
-        selectedFile = null;
+        selectedFiles = [];
         fileInput.value = "";
         fileBadge.classList.remove("visible");
         dropIcon.textContent = "📂";
-        dropTitle.textContent = "Drop your file here";
+        dropTitle.textContent = "Drop your files here";
         dropHint.innerHTML = `Supports <strong>.docx</strong> and <strong>.txt</strong> &nbsp;·&nbsp; Max 50 MB`;
         dropZone.classList.remove("has-file");
         convertBtn.disabled = true;
         hideStatus();
-        downloadBtn.classList.remove("visible");
+        clearDownloads();
       }
 
       // ── Drag & drop ───────────────────────────────────────────────────────────────
@@ -607,93 +642,115 @@
       dropZone.addEventListener("drop", (e) => {
         e.preventDefault();
         dropZone.classList.remove("drag-over");
-        const file = e.dataTransfer.files[0];
-        if (file) setFile(file);
+        const files = Array.from(e.dataTransfer.files);
+        if (files.length > 0) setFiles(files);
       });
       dropZone.addEventListener("keydown", (e) => {
         if (e.key === "Enter" || e.key === " ") fileInput.click();
       });
       fileInput.addEventListener("change", () => {
-        if (fileInput.files[0]) setFile(fileInput.files[0]);
+        const files = Array.from(fileInput.files || []);
+        if (files.length > 0) setFiles(files);
       });
       clearBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         clearFile();
       });
+      downloadAllBtn.addEventListener("click", downloadAllPresentations);
 
       // ── Convert ───────────────────────────────────────────────────────────────────
       convertBtn.addEventListener("click", async () => {
-        if (!selectedFile) return;
+        if (selectedFiles.length === 0) return;
 
         // Lock UI
         convertBtn.disabled = true;
         btnInner.innerHTML = `<span class="spinner"></span> Converting…`;
         progressWrap.classList.add("visible");
         hideStatus();
-        downloadBtn.classList.remove("visible");
+        clearDownloads();
 
-        // Animate progress bar (fake — real conversion is opaque)
-        animateProgress();
+        const successes = [];
+        const failures = [];
 
-        const form = new FormData();
-        form.append("file", selectedFile, selectedFile.name);
-
-        let resp;
-        try {
-          resp = await fetch("/convert", { method: "POST", body: form });
-        } catch (e) {
-          endProgress();
-          showStatus(
-            "error",
-            "❌ Could not reach the server. Is it running?\n\nRun: node server.js",
+        for (let i = 0; i < selectedFiles.length; i++) {
+          const file = selectedFiles[i];
+          animateProgress(
+            `Processing ${i + 1}/${selectedFiles.length}: ${file.name}`,
           );
-          resetBtn();
-          return;
-        }
 
-        endProgress();
+          const form = new FormData();
+          form.append("file", file, file.name);
 
-        if (!resp.ok) {
-          let errText = "";
+          let resp;
           try {
-            const j = await resp.json();
-            errText = j.error || "";
-          } catch (_) {
-            errText = await resp.text();
+            resp = await fetch("/convert", { method: "POST", body: form });
+          } catch (e) {
+            endProgress();
+            showStatus(
+              "error",
+              "❌ Could not reach the server. Is it running?\n\nRun: node server.js",
+            );
+            resetBtn();
+            return;
           }
+
+          endProgress();
+
+          if (!resp.ok) {
+            let errText = "";
+            try {
+              const j = await resp.json();
+              errText = j.error || "";
+            } catch (_) {
+              errText = await resp.text();
+            }
+            failures.push(
+              `${file.name}: ${errText.slice(0, 180) || "Conversion failed"}`,
+            );
+            continue;
+          }
+
+          const blob = await resp.blob();
+          const fname = getFilename(resp, file.name);
+          const url = URL.createObjectURL(blob);
+          storeDownload(fname, blob, url);
+          addDownloadLink(fname, url);
+          successes.push(`${fname} (${formatBytes(blob.size)})`);
+        }
+
+        if (successes.length > 0 && failures.length === 0) {
+          showStatus(
+            "success",
+            `✅ Converted ${successes.length} file(s). Download each presentation below.`,
+          );
+          resetBtn(true);
+          return;
+        }
+
+        if (successes.length > 0 && failures.length > 0) {
           showStatus(
             "error",
-            "❌ Conversion failed:\n\n" + errText.slice(0, 400),
+            `⚠️ Converted ${successes.length}/${selectedFiles.length} files.\nFailed: ${failures.join(" | ")}`,
           );
           resetBtn();
           return;
         }
-
-        // Success — create object URL and trigger download
-        const blob = await resp.blob();
-        const fname = getFilename(resp, selectedFile.name);
-        const url = URL.createObjectURL(blob);
-
-        downloadBtn.href = url;
-        downloadBtn.download = fname;
-        downloadBtn.classList.add("visible");
-        downloadBtn.textContent = `⬇ Download ${fname}`;
 
         showStatus(
-          "success",
-          `Converted successfully! ${formatBytes(blob.size)} · ${fname}`,
+          "error",
+          `❌ No files were converted.\n${failures.join(" | ")}`,
         );
-        resetBtn(true);
+        resetBtn();
       });
 
       // ── Helpers ───────────────────────────────────────────────────────────────────
       let progressInterval = null;
       let prog = 0;
 
-      function animateProgress() {
+      function animateProgress(initialMessage = "Processing your document…") {
         prog = 0;
         progressFill.style.width = "0%";
-        progressTxt.textContent = "Processing your document…";
+        progressTxt.textContent = initialMessage;
         clearInterval(progressInterval);
 
         const messages = [
@@ -727,10 +784,87 @@
       }
 
       function resetBtn(success = false) {
-        convertBtn.disabled = success; // disable after success (must re-select file)
+        convertBtn.disabled = success; // disable after full success (must re-select files)
         btnInner.innerHTML = success
-          ? `Done! Drop another file to convert again`
+          ? `Done! Drop more files to convert again`
           : `<span>✨</span> Convert to PowerPoint`;
+      }
+
+      function isSupportedFile(file) {
+        const ext = (file.name.split(".").pop() || "").toLowerCase();
+        return ["docx", "txt"].includes(ext);
+      }
+
+      function clearDownloads() {
+        downloads.forEach((item) => URL.revokeObjectURL(item.url));
+        downloads = [];
+        downloadList.innerHTML = "";
+        updateDownloadAllBtn();
+      }
+
+      function addDownloadLink(fname, url) {
+        const link = document.createElement("a");
+        link.className = "btn-download visible";
+        link.role = "button";
+        link.ariaLabel = `Download converted PowerPoint ${fname}`;
+        link.href = url;
+        link.download = fname;
+        link.textContent = `⬇ Download ${fname}`;
+        downloadList.appendChild(link);
+        updateDownloadAllBtn();
+      }
+
+      async function downloadAllPresentations() {
+        if (downloads.length === 0) return;
+
+        if (!window.showDirectoryPicker) {
+          // Fallback for browsers without File System Access API support.
+          downloads.forEach((item) => {
+            const a = document.createElement("a");
+            a.href = item.url;
+            a.download = item.fname;
+            a.click();
+          });
+          showStatus(
+            "success",
+            "Downloaded all files. Folder selection is not supported in this browser.",
+          );
+          return;
+        }
+
+        try {
+          const dirHandle = await window.showDirectoryPicker({
+            mode: "readwrite",
+          });
+          for (const item of downloads) {
+            const fileHandle = await dirHandle.getFileHandle(item.fname, {
+              create: true,
+            });
+            const writable = await fileHandle.createWritable();
+            await writable.write(item.blob);
+            await writable.close();
+          }
+          showStatus(
+            "success",
+            `Saved ${downloads.length} presentation(s) to your selected folder.`,
+          );
+        } catch (err) {
+          if (err && err.name === "AbortError") return;
+          showStatus(
+            "error",
+            `❌ Could not save all files: ${(err && err.message) || "Unknown error"}`,
+          );
+        }
+      }
+
+      function updateDownloadAllBtn() {
+        const hasDownloads = downloads.length > 0;
+        downloadAllBtn.classList.toggle("visible", hasDownloads);
+        downloadAllBtn.disabled = !hasDownloads;
+      }
+
+      function storeDownload(fname, blob, url) {
+        downloads.push({ fname, blob, url });
       }
 
       function showStatus(type, msg) {
